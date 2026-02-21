@@ -15,6 +15,7 @@ Top-down 2D pixel-art cozy sci-fi farming/life game foundation built with **Phas
 - **P**: Save game
 - **K**: Load game
 - **T**: Teleport to farm plot
+- Labeled gateways/entrances show destination names on-map
 - **N** on title: New game
 - **L** on title: Load game
 

@@ -5,7 +5,7 @@ export class Player {
     this.scene = scene;
     this.speed = 140;
     this.facing = { x: 1, y: 0 };
-    this.sprite = scene.add.image(x, y, 'player-pixel').setScale(1).setDepth(30);
+    this.sprite = scene.add.image(x, y, 'player-humanoid').setScale(1).setDepth(30);
   }
 
   update(cursors, deltaSec) {

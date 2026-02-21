@@ -30,7 +30,7 @@ export class GameScene extends Phaser.Scene {
     this.keys = this.input.keyboard.addKeys('ONE,TWO,THREE,FOUR,FIVE,SIX,SEVEN,E,F,P,K,T');
     this.player = new Player(this, this.state.player.x, this.state.player.y);
     this.hud = new Hud(this);
-    this.mapTitle = this.add.text(270, 34, '', { fontSize: '14px', color: '#f9ffab' }).setDepth(600);
+    this.mapTitle = this.add.text(260, 34, '', { fontSize: '14px', color: '#f9ffab' }).setDepth(600);
     this.renderLayer = this.add.container(0, 0).setDepth(2);
     this.dynamicLayer = this.add.container(0, 0).setDepth(10);
     this.tileCursor = this.add.rectangle(0, 0, 32, 32, 0xf8e48f, 0.15).setStrokeStyle(1, 0xf8e48f).setDepth(20);
@@ -98,43 +98,51 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  baseTileKey() {
+    if (this.currentMap === 'farm') return 'tile-grass';
+    if (this.currentMap === 'mine') return 'tile-mine-floor';
+    if (this.currentMap === 'ship') return 'tile-ship-floor';
+    return 'tile-hub-floor';
+  }
+
   drawMap() {
     this.renderLayer.removeAll(true);
     const map = MAPS[this.currentMap];
     this.cameras.main.setBackgroundColor(map.bgColor);
     this.mapTitle.setText(map.name);
 
-    for (let x = 0; x < 640; x += 32) {
-      for (let y = 0; y < 360; y += 32) {
-        const shade = (x / 32 + y / 32) % 2 === 0 ? 0x283753 : 0x24324c;
-        if (this.currentMap === 'farm') {
-          this.renderLayer.add(this.add.rectangle(x + 16, y + 16, 32, 32, (x / 32 + y / 32) % 2 ? 0x32594d : 0x2f4f44, 1));
-        } else if (this.currentMap === 'mine') {
-          this.renderLayer.add(this.add.rectangle(x + 16, y + 16, 32, 32, (x / 32 + y / 32) % 2 ? 0x3b3548 : 0x342f40, 1));
-        } else {
-          this.renderLayer.add(this.add.rectangle(x + 16, y + 16, 32, 32, shade, 1));
-        }
+    const tileKey = this.baseTileKey();
+    for (let x = 16; x < 640; x += 32) {
+      for (let y = 16; y < 360; y += 32) {
+        this.renderLayer.add(this.add.image(x, y, tileKey));
       }
     }
 
     map.transitions.forEach((t) => {
-      this.renderLayer.add(this.add.rectangle(t.x + t.w / 2, t.y + t.h / 2, t.w, t.h, 0x6ef2ff, 0.22).setStrokeStyle(2, 0xb2ffff));
+      const marker = this.add.rectangle(t.x + t.w / 2, t.y + t.h / 2, t.w, t.h, 0x6ef2ff, 0.25).setStrokeStyle(2, 0xffffff);
+      const label = this.add.text(t.x + t.w / 2, t.y - 14, t.label || `To ${MAPS[t.to].name}`, {
+        fontSize: '11px',
+        color: '#e2fbff',
+        backgroundColor: '#1d2838'
+      }).setOrigin(0.5, 0.5);
+      this.renderLayer.add(marker);
+      this.renderLayer.add(label);
     });
 
     if (this.currentMap === 'farm') {
       for (let x = FARM_BOUNDS.minX; x <= FARM_BOUNDS.maxX; x += 32) {
         for (let y = FARM_BOUNDS.minY; y <= FARM_BOUNDS.maxY; y += 32) {
-          this.renderLayer.add(this.add.rectangle(x, y, 30, 30, 0x6b8f6a, 0.75).setStrokeStyle(1, 0xa8c79e));
+          this.renderLayer.add(this.add.image(x, y, 'tile-dirt').setAlpha(0.55));
         }
       }
-      this.renderLayer.add(this.add.text(398, 126, 'Teleport beacon\n(T)', { fontSize: '11px', color: '#d3ffe2' }));
+      this.renderLayer.add(this.add.text(390, 124, 'Teleport Beacon (T)\nTarget: Hydro Farm', { fontSize: '11px', color: '#d3ffe2' }));
     }
 
     if (this.currentMap === 'ship') {
       const bed = MAPS.ship.bed;
       this.renderLayer.add(this.add.rectangle(bed.x + bed.w / 2, bed.y + bed.h / 2, bed.w, bed.h, 0xc2c7ff, 0.35).setStrokeStyle(2, 0xe8ebff));
       this.renderLayer.add(this.add.rectangle(350, 130, 24, 24, this.state.flags.openedSeedCache ? 0x7a7a7a : 0xe0c58a).setStrokeStyle(2, 0x2f2f2f));
-      this.renderLayer.add(this.add.text(328, 148, 'Seed Cache', { fontSize: '9px', color: '#fff8d2' }));
+      this.renderLayer.add(this.add.text(308, 148, 'Seed Cache\nStarter Seeds', { fontSize: '9px', color: '#fff8d2' }));
     }
   }
 
@@ -144,7 +152,7 @@ export class GameScene extends Phaser.Scene {
     if (this.currentMap === 'farm') {
       Object.entries(this.state.farming.tiles).forEach(([key, tile]) => {
         const [x, y] = key.split(',').map(Number);
-        if (tile.tilled) this.dynamicLayer.add(this.add.rectangle(x, y, 26, 26, 0x6d4a2c, 1).setStrokeStyle(1, 0x8f6b42));
+        if (tile.tilled) this.dynamicLayer.add(this.add.image(x, y, 'tile-dirt'));
         if (tile.cropId) {
           this.dynamicLayer.add(this.add.image(x, y + 2, tile.ready ? 'crop-ready' : 'crop-sprout'));
           if (tile.watered) this.dynamicLayer.add(this.add.rectangle(x + 12, y - 12, 5, 5, 0x80d2ff));
@@ -153,15 +161,15 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.state.npcs.getForMap(this.currentMap).forEach((npc) => {
-      const body = this.add.image(npc.x, npc.y, 'npc-pixel').setTint(npc.color);
+      const body = this.add.image(npc.x, npc.y, 'npc-humanoid').setTint(npc.color);
       this.dynamicLayer.add(body);
-      this.dynamicLayer.add(this.add.text(npc.x - 16, npc.y - 22, npc.name, { fontSize: '10px', color: '#fff3ca' }));
+      this.dynamicLayer.add(this.add.text(npc.x - 20, npc.y - 26, npc.name, { fontSize: '10px', color: '#fff3ca', backgroundColor: '#1f2230' }));
     });
 
     Object.values(SHOPS).filter((s) => s.map === this.currentMap).forEach((shop) => {
       const open = this.state.time.minutes >= shop.open && this.state.time.minutes < shop.close;
-      this.dynamicLayer.add(this.add.rectangle(shop.x, shop.y, 38, 28, open ? 0x89e7a9 : 0x686868, 0.95).setStrokeStyle(2, 0x2d2d2d));
-      this.dynamicLayer.add(this.add.text(shop.x - 28, shop.y - 24, shop.name, { fontSize: '10px', color: open ? '#d6ffe2' : '#aeaeae' }));
+      this.dynamicLayer.add(this.add.rectangle(shop.x, shop.y, 40, 30, open ? 0x89e7a9 : 0x686868, 0.95).setStrokeStyle(2, 0x2d2d2d));
+      this.dynamicLayer.add(this.add.text(shop.x - 32, shop.y - 26, `${shop.name}\n${open ? 'OPEN' : 'CLOSED'}`, { fontSize: '9px', color: open ? '#d6ffe2' : '#aeaeae' }));
     });
 
     if (this.currentMap === 'mine' && this.state.combat.enemy.alive) {
@@ -193,12 +201,12 @@ export class GameScene extends Phaser.Scene {
     if (nearNpc) return `E: Talk ${nearNpc.name}`;
 
     const nearShop = Object.values(SHOPS).find((s) => s.map === this.currentMap && Math.hypot(s.x - p.x, s.y - p.y) < 34);
-    if (nearShop) return 'E: Buy / Sell';
+    if (nearShop) return `E: ${nearShop.name}`;
 
-    if (this.currentMap === 'farm') return 'E: Hoe/Seed/Water/Harvest   | T: Teleport to plot';
+    if (this.currentMap === 'farm') return 'E: Hoe/Seed/Water/Harvest   | T: Teleport to Hydro Farm';
     if (this.currentMap === 'mine') return 'F: Fire blaster';
-    if (this.currentMap === 'ship') return 'E: Bed sleep or open seed cache';
-    return 'Explore station. T teleports to farm plot.';
+    if (this.currentMap === 'ship') return 'E: Bed sleep or open Seed Cache';
+    return 'Use labeled gateways to move between zones.';
   }
 
   isFarmTile(x, y) {
