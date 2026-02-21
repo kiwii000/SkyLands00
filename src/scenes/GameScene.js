@@ -9,6 +9,8 @@ import { ITEMS } from '../data/items';
 import { registerPixelTextures } from '../utils/pixelArt';
 
 const FARM_BOUNDS = { minX: 128, maxX: 320, minY: 96, maxY: 224 };
+const INV_COLS = 6;
+const INV_ROWS = 4;
 
 export class GameScene extends Phaser.Scene {
   constructor() {
@@ -21,13 +23,15 @@ export class GameScene extends Phaser.Scene {
     if (data.look) this.state.player.look = data.look;
     this.currentMap = this.state.player.map;
     this.selectedSlot = this.state.selectedSlot || 0;
+    this.inventoryOpen = false;
+    this.inventoryCursor = 0;
   }
 
   create() {
     registerPixelTextures(this, this.state.player.look);
 
     this.cursors = this.input.keyboard.createCursorKeys();
-    this.keys = this.input.keyboard.addKeys('ONE,TWO,THREE,FOUR,FIVE,SIX,SEVEN,E,F,P,K,T');
+    this.keys = this.input.keyboard.addKeys('ONE,TWO,THREE,FOUR,FIVE,SIX,SEVEN,E,F,P,K,T,I,J,L,U,O,X,R');
     this.player = new Player(this, this.state.player.x, this.state.player.y);
     this.hud = new Hud(this);
     this.mapTitle = this.add.text(260, 34, '', { fontSize: '14px', color: '#f9ffab' }).setDepth(600);
@@ -47,6 +51,17 @@ export class GameScene extends Phaser.Scene {
         this.state.selectedSlot = i;
       });
     });
+
+    this.keys.I.on('down', () => {
+      this.inventoryOpen = !this.inventoryOpen;
+      this.hud.flash(this.inventoryOpen ? 'Inventory opened.' : 'Inventory closed.');
+    });
+    this.keys.J.on('down', () => this.inventoryOpen && this.moveInventoryCursor(-1, 0));
+    this.keys.L.on('down', () => this.inventoryOpen && this.moveInventoryCursor(1, 0));
+    this.keys.U.on('down', () => this.inventoryOpen && this.moveInventoryCursor(0, -1));
+    this.keys.O.on('down', () => this.inventoryOpen && this.moveInventoryCursor(0, 1));
+    this.keys.X.on('down', () => this.inventoryOpen && this.handleInventorySplit());
+    this.keys.R.on('down', () => this.inventoryOpen && this.handleInventorySort());
 
     this.keys.E.on('down', () => this.handleUse());
     this.keys.F.on('down', () => this.handleCombat());
@@ -72,6 +87,27 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  moveInventoryCursor(dx, dy) {
+    const col = (this.inventoryCursor % INV_COLS + dx + INV_COLS) % INV_COLS;
+    const row = (Math.floor(this.inventoryCursor / INV_COLS) + dy + INV_ROWS) % INV_ROWS;
+    this.inventoryCursor = row * INV_COLS + col;
+  }
+
+  handleInventoryUse() {
+    const ok = this.state.inventory.swapHotbarWithInventory(this.selectedSlot, this.inventoryCursor);
+    this.hud.flash(ok ? `Swapped hotbar slot ${this.selectedSlot + 1}.` : 'Nothing to move.');
+  }
+
+  handleInventorySplit() {
+    const ok = this.state.inventory.splitStack(this.inventoryCursor);
+    this.hud.flash(ok ? 'Split stack into two slots.' : 'Cannot split this slot.');
+  }
+
+  handleInventorySort() {
+    this.state.inventory.autoSort();
+    this.hud.flash('Inventory auto-sorted.');
+  }
+
   buildSave() {
     this.state.player = { map: this.currentMap, x: this.player.sprite.x, y: this.player.sprite.y, look: this.state.player.look };
     return this.state.toJSON();
@@ -79,7 +115,7 @@ export class GameScene extends Phaser.Scene {
 
   update(_, delta) {
     const deltaSec = delta / 1000;
-    this.player.update(this.cursors, deltaSec);
+    if (!this.inventoryOpen) this.player.update(this.cursors, deltaSec);
 
     const tick = this.state.time.update(deltaSec);
     this.state.npcs.update(this.state.time.minutes);
@@ -94,7 +130,9 @@ export class GameScene extends Phaser.Scene {
       inventory: this.state.inventory,
       selectedSlot: this.selectedSlot,
       mapName: MAPS[this.currentMap].name,
-      prompt: this.getContextPrompt()
+      prompt: this.getContextPrompt(),
+      inventoryOpen: this.inventoryOpen,
+      inventoryCursor: this.inventoryCursor
     });
   }
 
@@ -182,10 +220,11 @@ export class GameScene extends Phaser.Scene {
   updateTileCursor() {
     const t = this.player.getInteractionPoint();
     this.tileCursor.setPosition(t.x, t.y);
-    this.tileCursor.setVisible(this.currentMap === 'farm');
+    this.tileCursor.setVisible(this.currentMap === 'farm' && !this.inventoryOpen);
   }
 
   handleTransitions() {
+    if (this.inventoryOpen) return;
     const map = MAPS[this.currentMap];
     const p = this.player.sprite;
     const hit = map.transitions.find((t) => p.x >= t.x && p.x <= t.x + t.w && p.y >= t.y && p.y <= t.y + t.h);
@@ -196,6 +235,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   getContextPrompt() {
+    if (this.inventoryOpen) {
+      return 'Inventory: J/L/U/O move • E transfer • X split • R sort • I close';
+    }
+
     const p = this.player.sprite;
     const nearNpc = this.state.npcs.getForMap(this.currentMap).find((n) => Math.hypot(n.x - p.x, n.y - p.y) < 30);
     if (nearNpc) return `E: Talk ${nearNpc.name}`;
@@ -214,6 +257,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   handleUse() {
+    if (this.inventoryOpen) return this.handleInventoryUse();
+
     const p = this.player.sprite;
     const nearNpc = this.state.npcs.getForMap(this.currentMap).find((n) => Math.hypot(n.x - p.x, n.y - p.y) < 30);
     if (nearNpc) return this.hud.flash(`${nearNpc.name}: ${nearNpc.currentBlock.dialogue}`);
@@ -273,6 +318,7 @@ export class GameScene extends Phaser.Scene {
 
     const stock = shop.stock[0];
     if (this.state.inventory.gold >= stock.price) {
+      if (!this.state.inventory.hasSpaceFor(stock.itemId, 1)) return this.hud.flash('Inventory full.');
       this.state.inventory.gold -= stock.price;
       this.state.inventory.addItem(stock.itemId, 1);
       return this.hud.flash(`Bought ${ITEMS[stock.itemId].name}.`);
@@ -285,6 +331,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   handleCombat() {
+    if (this.inventoryOpen) return;
     if (this.currentMap !== 'mine') return;
     const held = this.state.inventory.hotbar[this.selectedSlot];
     if (held !== 'blaster') return this.hud.flash('Equip Pulse Blaster first.');
